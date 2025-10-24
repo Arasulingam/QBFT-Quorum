@@ -1,0 +1,73 @@
+=============== Oct 16, 2025 (IST) ===============
+21:57:55.374079 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+21:57:55.380729 db@open opening
+21:57:55.382800 version@stat F·[] S·0B[] Sc·[]
+21:57:55.384770 db@janitor F·2 G·0
+21:57:55.384783 db@open done T·4.041961ms
+=============== Oct 16, 2025 (IST) ===============
+22:00:34.529673 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+22:00:34.529732 version@stat F·[] S·0B[] Sc·[]
+22:00:34.529748 db@open opening
+22:00:34.529763 journal@recovery F·1
+22:00:34.530036 journal@recovery recovering @1
+22:00:34.532837 memdb@flush created L0@2 N·1 S·123B "version,v1":"version,v1"
+22:00:34.533149 version@stat F·[1] S·123B[123B] Sc·[0.25]
+22:00:34.542221 db@janitor F·3 G·0
+22:00:34.542236 db@open done T·12.482165ms
+22:25:42.253541 db@close closing
+22:25:42.253727 db@close done T·185.782µs
+=============== Oct 23, 2025 (IST) ===============
+17:39:07.183480 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+17:39:07.186039 version@stat F·[1] S·123B[123B] Sc·[0.25]
+17:39:07.186087 db@open opening
+17:39:07.186137 journal@recovery F·1
+17:39:07.189150 journal@recovery recovering @3
+17:39:07.193784 memdb@flush created L0@5 N·1 S·159B "loc..seq,v3":"loc..seq,v3"
+17:39:07.196563 version@stat F·[2] S·282B[282B] Sc·[0.50]
+17:39:07.211957 db@janitor F·4 G·0
+17:39:07.212001 db@open done T·25.9093ms
+18:07:43.809976 db@close closing
+18:07:43.811201 db@close done T·1.222314ms
+=============== Oct 23, 2025 (IST) ===============
+18:08:08.822294 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+18:08:08.824122 version@stat F·[2] S·282B[282B] Sc·[0.50]
+18:08:08.824166 db@open opening
+18:08:08.824207 journal@recovery F·1
+18:08:08.827207 journal@recovery recovering @6
+18:08:08.833754 memdb@flush created L0@8 N·1 S·159B "loc..seq,v5":"loc..seq,v5"
+18:08:08.836855 version@stat F·[3] S·441B[441B] Sc·[0.75]
+18:08:08.857747 db@janitor F·5 G·0
+18:08:08.857817 db@open done T·33.642043ms
+18:08:54.126138 db@close closing
+18:08:54.126279 db@close done T·139.803µs
+=============== Oct 24, 2025 (IST) ===============
+09:28:42.185227 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+09:28:42.187596 version@stat F·[3] S·441B[441B] Sc·[0.75]
+09:28:42.187643 db@open opening
+09:28:42.187693 journal@recovery F·1
+09:28:42.191043 journal@recovery recovering @9
+09:28:42.197217 memdb@flush created L0@11 N·1 S·159B "loc..seq,v7":"loc..seq,v7"
+09:28:42.201698 version@stat F·[4] S·600B[600B] Sc·[1.00]
+09:28:42.225827 db@janitor F·6 G·0
+09:28:42.225916 db@open done T·38.262397ms
+09:28:42.226166 table@compaction L0·3 -> L1·0 S·477B Q·8
+09:28:42.234117 table@build created L1@14 N·1 S·159B "loc..seq,v7":"loc..seq,v7"
+09:28:42.234263 version@stat F·[1 1] S·282B[123B 159B] Sc·[0.25 0.00]
+09:28:42.240938 table@compaction committed F-2 S-318B Ke·0 D·2 T·14.71189ms
+09:28:42.241117 table@remove removed @8
+09:28:42.241148 table@remove removed @5
+09:52:26.602522 db@close closing
+09:52:26.604036 db@close done T·1.51014ms
+=============== Oct 24, 2025 (IST) ===============
+09:58:20.386479 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+09:58:20.388190 version@stat F·[1 1] S·282B[123B 159B] Sc·[0.25 0.00]
+09:58:20.388311 db@open opening
+09:58:20.388393 journal@recovery F·1
+09:58:20.391330 journal@recovery recovering @12
+09:58:20.395874 memdb@flush created L0@15 N·1 S·159B "loc..seq,v9":"loc..seq,v9"
+09:58:20.399071 version@stat F·[2 1] S·441B[282B 159B] Sc·[0.50 0.00]
+09:58:20.419731 db@janitor F·6 G·1
+09:58:20.419762 db@janitor removing table-11
+09:58:20.420641 db@open done T·32.314958ms
+15:29:14.148330 db@close closing
+15:29:14.148779 db@close done T·448.491µs

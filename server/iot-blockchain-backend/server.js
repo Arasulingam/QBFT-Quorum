@@ -1,0 +1,421 @@
+
+// Backend Server for IoT Temperature Monitoring with Blockchain
+// Install dependencies: npm install express web3 dotenv cors body-parser
+
+const express = require('express');
+const Web3 = require('web3');
+const cors = require('cors');
+const bodyParser = require('body-parser');
+require('dotenv').config();
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Middleware
+app.use(cors());
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// Web3 Configuration with fallback
+const rpcUrl = process.env.BLOCKCHAIN_RPC || 'http://127.0.0.1:32000';
+const web3 = new Web3(
+  rpcUrl.startsWith('ws')
+    ? new Web3.providers.WebsocketProvider(rpcUrl)
+    : new Web3.providers.HttpProvider(rpcUrl)
+);
+
+
+// Check if WebSocket for events
+const isWebSocket = rpcUrl.startsWith('ws://') || rpcUrl.startsWith('wss://');
+
+// Smart Contract Configuration
+const contractAddress = process.env.CONTRACT_ADDRESS || '0x...';
+const contractABI = [{"inputs":[],"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"deviceAddress","type":"address"},{"indexed":false,"internalType":"string","name":"deviceId","type":"string"},{"indexed":false,"internalType":"int256","name":"temperature","type":"int256"},{"indexed":false,"internalType":"string","name":"alertType","type":"string"}],"name":"AlertTriggered","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"deviceAddress","type":"address"},{"indexed":false,"internalType":"string","name":"deviceId","type":"string"},{"indexed":false,"internalType":"string","name":"location","type":"string"}],"name":"DeviceRegistered","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"deviceAddress","type":"address"},{"indexed":false,"internalType":"string","name":"deviceId","type":"string"},{"indexed":false,"internalType":"int256","name":"temperature","type":"int256"},{"indexed":false,"internalType":"uint256","name":"timestamp","type":"uint256"}],"name":"TemperatureRecorded","type":"event"},{"inputs":[{"internalType":"address","name":"deviceAddress","type":"address"}],"name":"authorizeDevice","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"deviceAddresses","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"","type":"address"},{"internalType":"uint256","name":"","type":"uint256"}],"name":"deviceReadings","outputs":[{"internalType":"uint256","name":"timestamp","type":"uint256"},{"internalType":"int256","name":"temperature","type":"int256"},{"internalType":"string","name":"deviceId","type":"string"},{"internalType":"string","name":"location","type":"string"},{"internalType":"bool","name":"isValid","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"devices","outputs":[{"internalType":"string","name":"deviceId","type":"string"},{"internalType":"string","name":"location","type":"string"},{"internalType":"bool","name":"isAuthorized","type":"bool"},{"internalType":"uint256","name":"registeredAt","type":"uint256"},{"internalType":"uint256","name":"lastUpdate","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"getAllDevices","outputs":[{"internalType":"address[]","name":"","type":"address[]"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"deviceAddress","type":"address"}],"name":"getDeviceInfo","outputs":[{"internalType":"string","name":"deviceId","type":"string"},{"internalType":"string","name":"location","type":"string"},{"internalType":"bool","name":"isAuthorized","type":"bool"},{"internalType":"uint256","name":"registeredAt","type":"uint256"},{"internalType":"uint256","name":"lastUpdate","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"deviceAddress","type":"address"},{"internalType":"uint256","name":"limit","type":"uint256"}],"name":"getDeviceReadings","outputs":[{"components":[{"internalType":"uint256","name":"timestamp","type":"uint256"},{"internalType":"int256","name":"temperature","type":"int256"},{"internalType":"string","name":"deviceId","type":"string"},{"internalType":"string","name":"location","type":"string"},{"internalType":"bool","name":"isValid","type":"bool"}],"internalType":"struct IoTTemperatureMonitor.TemperatureReading[]","name":"","type":"tuple[]"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"deviceAddress","type":"address"}],"name":"getLatestReading","outputs":[{"internalType":"uint256","name":"timestamp","type":"uint256"},{"internalType":"int256","name":"temperature","type":"int256"},{"internalType":"string","name":"deviceId","type":"string"},{"internalType":"string","name":"location","type":"string"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"deviceAddress","type":"address"}],"name":"getReadingCount","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"highTempThreshold","outputs":[{"internalType":"int256","name":"","type":"int256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"lowTempThreshold","outputs":[{"internalType":"int256","name":"","type":"int256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"int256","name":"temperature","type":"int256"}],"name":"recordTemperature","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"deviceAddress","type":"address"},{"internalType":"string","name":"deviceId","type":"string"},{"internalType":"string","name":"location","type":"string"}],"name":"registerDevice","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"deviceAddress","type":"address"}],"name":"revokeDevice","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"int256","name":"high","type":"int256"},{"internalType":"int256","name":"low","type":"int256"}],"name":"updateThresholds","outputs":[],"stateMutability":"nonpayable","type":"function"}];
+
+const contract = new web3.eth.Contract(contractABI, contractAddress);
+
+// Device accounts (private keys for ESP32 devices)
+const deviceAccounts = {
+  device1: {
+    address: process.env.DEVICE1_ADDRESS,
+    privateKey: process.env.DEVICE1_PRIVATE_KEY
+  },
+  device2: {
+    address: process.env.DEVICE2_ADDRESS,
+    privateKey: process.env.DEVICE2_PRIVATE_KEY
+  }
+};
+
+// Owner account
+const ownerAccount = {
+  address: process.env.OWNER_ADDRESS,
+  privateKey: process.env.OWNER_PRIVATE_KEY
+};
+
+// Connection verification
+async function verifyConnection() {
+  try {
+    const isListening = await web3.eth.net.isListening();
+    if (!isListening) {
+      throw new Error('Blockchain node is not responding');
+    }
+    const blockNumber = await web3.eth.getBlockNumber();
+    console.log('✅ Blockchain connected. Current block:', blockNumber);
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to connect to blockchain:', error.message);
+    console.error('💡 Make sure your QBFT network is running at:', rpcUrl);
+    return false;
+  }
+}
+
+// Health check
+app.get('/health', async (req, res) => {
+  try {
+    const isConnected = await web3.eth.net.isListening();
+    res.json({
+      status: 'OK',
+      message: 'IoT Blockchain Server is running',
+      blockchainConnected: isConnected
+    });
+  } catch (error) {
+    res.status(503).json({
+      status: 'ERROR',
+      message: 'Blockchain connection failed',
+      error: error.message
+    });
+  }
+});
+// Replace your existing /api/debug endpoint with this enhanced version:
+
+app.get('/api/debug', async (req, res) => {
+  try {
+    const debugInfo = {
+      serverConfig: {
+        contractAddress: contractAddress,
+        rpcUrl: rpcUrl,
+        isWebSocket: isWebSocket
+      },
+      blockchain: {},
+      contract: {}
+    };
+
+    // Check blockchain connection
+    try {
+      debugInfo.blockchain.isListening = await web3.eth.net.isListening();
+      debugInfo.blockchain.blockNumber = await web3.eth.getBlockNumber();
+      debugInfo.blockchain.networkId = await web3.eth.net.getId();
+    } catch (err) {
+      debugInfo.blockchain.error = err.message;
+    }
+
+    // Check if contract exists at address
+    try {
+      const code = await web3.eth.getCode(contractAddress);
+      debugInfo.contract.hasCode = code !== '0x' && code !== '0x0';
+      debugInfo.contract.codeLength = code.length;
+      
+      if (!debugInfo.contract.hasCode) {
+        debugInfo.contract.warning = 'No contract code found at this address. Contract may not be deployed.';
+      }
+    } catch (err) {
+      debugInfo.contract.codeError = err.message;
+    }
+
+    // Try to call getAllDevices only if contract exists
+    if (debugInfo.contract.hasCode) {
+      try {
+        const devices = await contract.methods.getAllDevices().call();
+        debugInfo.contract.devices = devices;
+        debugInfo.contract.deviceCount = devices.length;
+      } catch (err) {
+        debugInfo.contract.getAllDevicesError = err.message;
+      }
+
+      // Try to get owner
+      try {
+        const owner = await contract.methods.owner().call();
+        debugInfo.contract.owner = owner;
+      } catch (err) {
+        debugInfo.contract.ownerError = err.message;
+      }
+
+      // Try to get thresholds
+      try {
+        const highThreshold = await contract.methods.highTempThreshold().call();
+        const lowThreshold = await contract.methods.lowTempThreshold().call();
+        debugInfo.contract.highTempThreshold = highThreshold;
+        debugInfo.contract.lowTempThreshold = lowThreshold;
+      } catch (err) {
+        debugInfo.contract.thresholdError = err.message;
+      }
+    }
+
+    res.json({ 
+      success: debugInfo.contract.hasCode && debugInfo.blockchain.isListening,
+      debugInfo 
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false,
+      error: error.message,
+      stack: error.stack 
+    });
+  }
+});
+
+// Register a new device (Owner only)
+app.post('/api/register-device', async (req, res) => {
+  try {
+    const { deviceAddress, deviceId, location } = req.body;
+
+    if (!deviceAddress || !deviceId || !location) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Verify connection
+    const isConnected = await web3.eth.net.isListening();
+    if (!isConnected) {
+      return res.status(503).json({ error: 'Blockchain not available' });
+    }
+
+    const account = web3.eth.accounts.privateKeyToAccount(ownerAccount.privateKey);
+    web3.eth.accounts.wallet.add(account);
+
+    const tx = contract.methods.registerDevice(deviceAddress, deviceId, location);
+
+    // For QBFT, use fixed gas values
+    const receipt = await tx.send({
+      from: ownerAccount.address,
+      gas: 3000000,
+      gasPrice: '0'
+    });
+
+    res.json({
+      success: true,
+      transactionHash: receipt.transactionHash,
+      deviceAddress,
+      deviceId,
+      location
+    });
+  } catch (error) {
+    console.error('Error registering device:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Record temperature from ESP32
+app.post('/api/temperature', async (req, res) => {
+  try {
+    const { deviceId, temperature, privateKey } = req.body;
+
+    if (!deviceId || temperature === undefined || !privateKey) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Verify connection
+    const isConnected = await web3.eth.net.isListening();
+    if (!isConnected) {
+      return res.status(503).json({ error: 'Blockchain not available' });
+    }
+
+    // Convert temperature to integer (multiply by 100)
+    const tempInt = Math.round(temperature * 100);
+
+    const account = web3.eth.accounts.privateKeyToAccount(privateKey);
+    web3.eth.accounts.wallet.add(account);
+
+    const tx = contract.methods.recordTemperature(tempInt);
+
+    // For QBFT, use fixed gas values
+    const receipt = await tx.send({
+      from: account.address,
+      gas: 3000000,
+      gasPrice: '0'
+    });
+
+    res.json({
+      success: true,
+      transactionHash: receipt.transactionHash,
+      blockNumber: receipt.blockNumber,
+      deviceId,
+      temperature,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error recording temperature:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get latest temperature reading
+app.get('/api/temperature/:deviceAddress', async (req, res) => {
+  try {
+    const { deviceAddress } = req.params;
+
+    // Verify connection
+    const isConnected = await web3.eth.net.isListening();
+    if (!isConnected) {
+      return res.status(503).json({ error: 'Blockchain not available' });
+    }
+
+    const reading = await contract.methods.getLatestReading(deviceAddress).call();
+
+    res.json({
+      success: true,
+      data: {
+        timestamp: new Date(parseInt(reading.timestamp) * 1000).toISOString(),
+        temperature: parseFloat(reading.temperature) / 100,
+        deviceId: reading.deviceId,
+        location: reading.location
+      }
+    });
+  } catch (error) {
+    console.error('Error getting temperature:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get device readings history
+app.get('/api/readings/:deviceAddress', async (req, res) => {
+  try {
+    const { deviceAddress } = req.params;
+    const limit = parseInt(req.query.limit) || 10;
+
+    // Verify connection
+    const isConnected = await web3.eth.net.isListening();
+    if (!isConnected) {
+      return res.status(503).json({ error: 'Blockchain not available' });
+    }
+
+    const readings = await contract.methods.getDeviceReadings(deviceAddress, limit).call();
+
+    const formattedReadings = readings.map(reading => ({
+      timestamp: new Date(parseInt(reading.timestamp) * 1000).toISOString(),
+      temperature: parseFloat(reading.temperature) / 100,
+      deviceId: reading.deviceId,
+      location: reading.location,
+      isValid: reading.isValid
+    }));
+
+    res.json({
+      success: true,
+      count: formattedReadings.length,
+      data: formattedReadings
+    });
+  } catch (error) {
+    console.error('Error getting readings:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all registered devices
+app.get('/api/devices', async (req, res) => {
+  try {
+    // Verify connection
+    const isConnected = await web3.eth.net.isListening();
+    if (!isConnected) {
+      return res.status(503).json({ error: 'Blockchain not available' });
+    }
+
+    const devices = await contract.methods.getAllDevices().call();
+
+    const deviceList = await Promise.all(
+      devices.map(async (address) => {
+        try {
+          const reading = await contract.methods.getLatestReading(address).call();
+          return {
+            address,
+            deviceId: reading.deviceId,
+            location: reading.location,
+            lastTemperature: parseFloat(reading.temperature) / 100,
+            lastUpdate: new Date(parseInt(reading.timestamp) * 1000).toISOString()
+          };
+        } catch (error) {
+          return {
+            address,
+            deviceId: 'Unknown',
+            location: 'Unknown',
+            lastTemperature: null,
+            lastUpdate: null
+          };
+        }
+      })
+    );
+
+    res.json({
+      success: true,
+      count: deviceList.length,
+      data: deviceList
+    });
+  } catch (error) {
+    console.error('Error getting devices:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Listen for blockchain events (only if WebSocket)
+function listenToEvents() {
+  if (!isWebSocket) {
+    console.log('⚠️  Using HTTP provider - real-time events disabled');
+    console.log('💡 To enable events, change BLOCKCHAIN_RPC in .env to: ws://127.0.0.1:32000');
+    return;
+  }
+
+  console.log('📡 Setting up event listeners...');
+
+  // Listen for temperature recordings
+  contract.events.TemperatureRecorded({
+    fromBlock: 'latest'
+  })
+  .on('data', (event) => {
+    console.log('📊 Temperature Recorded:', {
+      deviceAddress: event.returnValues.deviceAddress,
+      deviceId: event.returnValues.deviceId,
+      temperature: parseFloat(event.returnValues.temperature) / 100,
+      timestamp: new Date(parseInt(event.returnValues.timestamp) * 1000).toISOString()
+    });
+  })
+  .on('error', (error) => {
+    console.error('Event error:', error.message);
+  });
+
+  // Listen for alerts
+  contract.events.AlertTriggered({
+    fromBlock: 'latest'
+  })
+  .on('data', (event) => {
+    console.log('⚠️  ALERT TRIGGERED:', {
+      deviceAddress: event.returnValues.deviceAddress,
+      deviceId: event.returnValues.deviceId,
+      temperature: parseFloat(event.returnValues.temperature) / 100,
+      alertType: event.returnValues.alertType
+    });
+  })
+  .on('error', (error) => {
+    console.error('Alert event error:', error.message);
+  });
+}
+
+// Start server
+async function startServer() {
+  // Verify blockchain connection first
+  const connected = await verifyConnection();
+
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📡 Connected to blockchain: ${rpcUrl}`);
+    console.log(`📝 Contract address: ${contractAddress}`);
+
+    if (connected) {
+      listenToEvents();
+    } else {
+      console.error('⚠️  Server started but blockchain is not available!');
+      console.error('💡 Check that your QBFT network is running');
+    }
+  });
+}
+
+startServer();
+
+module.exports = app;

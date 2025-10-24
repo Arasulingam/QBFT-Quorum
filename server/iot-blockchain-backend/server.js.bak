@@ -1,0 +1,355 @@
+// Backend Server for IoT Temperature Monitoring with Blockchain
+// Install dependencies: npm install express web3 dotenv cors body-parser
+
+const express = require('express');
+const Web3 = require('web3');
+const cors = require('cors');
+const bodyParser = require('body-parser');
+require('dotenv').config();
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Middleware
+app.use(cors());
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// Web3 Configuration
+const web3 = new Web3(process.env.BLOCKCHAIN_RPC || 'ws://127.0.0.1:32000');
+
+// Smart Contract Configuration
+const contractAddress = process.env.CONTRACT_ADDRESS || '0x...'; // Deploy contract first
+const contractABI = [
+  {
+    "inputs": [],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {"indexed": true, "internalType": "address", "name": "deviceAddress", "type": "address"},
+      {"indexed": false, "internalType": "string", "name": "deviceId", "type": "string"},
+      {"indexed": false, "internalType": "int256", "name": "temperature", "type": "int256"},
+      {"indexed": false, "internalType": "string", "name": "alertType", "type": "string"}
+    ],
+    "name": "AlertTriggered",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {"indexed": true, "internalType": "address", "name": "deviceAddress", "type": "address"},
+      {"indexed": false, "internalType": "string", "name": "deviceId", "type": "string"},
+      {"indexed": false, "internalType": "string", "name": "location", "type": "string"}
+    ],
+    "name": "DeviceRegistered",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {"indexed": true, "internalType": "address", "name": "deviceAddress", "type": "address"},
+      {"indexed": false, "internalType": "string", "name": "deviceId", "type": "string"},
+      {"indexed": false, "internalType": "int256", "name": "temperature", "type": "int256"},
+      {"indexed": false, "internalType": "uint256", "name": "timestamp", "type": "uint256"}
+    ],
+    "name": "TemperatureRecorded",
+    "type": "event"
+  },
+  {
+    "inputs": [
+      {"internalType": "address", "name": "deviceAddress", "type": "address"},
+      {"internalType": "string", "name": "deviceId", "type": "string"},
+      {"internalType": "string", "name": "location", "type": "string"}
+    ],
+    "name": "registerDevice",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "int256", "name": "temperature", "type": "int256"}
+    ],
+    "name": "recordTemperature",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "address", "name": "deviceAddress", "type": "address"}
+    ],
+    "name": "getLatestReading",
+    "outputs": [
+      {"internalType": "uint256", "name": "timestamp", "type": "uint256"},
+      {"internalType": "int256", "name": "temperature", "type": "int256"},
+      {"internalType": "string", "name": "deviceId", "type": "string"},
+      {"internalType": "string", "name": "location", "type": "string"}
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "address", "name": "deviceAddress", "type": "address"},
+      {"internalType": "uint256", "name": "limit", "type": "uint256"}
+    ],
+    "name": "getDeviceReadings",
+    "outputs": [
+      {
+        "components": [
+          {"internalType": "uint256", "name": "timestamp", "type": "uint256"},
+          {"internalType": "int256", "name": "temperature", "type": "int256"},
+          {"internalType": "string", "name": "deviceId", "type": "string"},
+          {"internalType": "string", "name": "location", "type": "string"},
+          {"internalType": "bool", "name": "isValid", "type": "bool"}
+        ],
+        "internalType": "struct IoTTemperatureMonitor.TemperatureReading[]",
+        "name": "",
+        "type": "tuple[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getAllDevices",
+    "outputs": [
+      {"internalType": "address[]", "name": "", "type": "address[]"}
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
+];
+
+const contract = new web3.eth.Contract(contractABI, contractAddress);
+
+// Device accounts (private keys for ESP32 devices)
+const deviceAccounts = {
+  device1: {
+    address: process.env.DEVICE1_ADDRESS,
+    privateKey: process.env.DEVICE1_PRIVATE_KEY
+  },
+  device2: {
+    address: process.env.DEVICE2_ADDRESS,
+    privateKey: process.env.DEVICE2_PRIVATE_KEY
+  }
+};
+
+// Owner account
+const ownerAccount = {
+  address: process.env.OWNER_ADDRESS,
+  privateKey: process.env.OWNER_PRIVATE_KEY
+};
+
+// Health check
+app.get('/health', (req, res) => {
+  res.json({ status: 'OK', message: 'IoT Blockchain Server is running' });
+});
+
+// Register a new device (Owner only)
+app.post('/api/register-device', async (req, res) => {
+  try {
+    const { deviceAddress, deviceId, location } = req.body;
+
+    if (!deviceAddress || !deviceId || !location) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const account = web3.eth.accounts.privateKeyToAccount(ownerAccount.privateKey);
+    web3.eth.accounts.wallet.add(account);
+
+    const tx = contract.methods.registerDevice(deviceAddress, deviceId, location);
+    const gas = await tx.estimateGas({ from: ownerAccount.address });
+    const gasPrice = await web3.eth.getGasPrice();
+
+    const receipt = await tx.send({
+      from: ownerAccount.address,
+      gas: gas,
+      gasPrice: gasPrice
+    });
+
+    res.json({
+      success: true,
+      transactionHash: receipt.transactionHash,
+      deviceAddress,
+      deviceId,
+      location
+    });
+  } catch (error) {
+    console.error('Error registering device:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Record temperature from ESP32
+app.post('/api/temperature', async (req, res) => {
+  try {
+    const { deviceId, temperature, privateKey } = req.body;
+
+    if (!deviceId || temperature === undefined || !privateKey) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Convert temperature to integer (multiply by 100)
+    const tempInt = Math.round(temperature * 100);
+
+    const account = web3.eth.accounts.privateKeyToAccount(privateKey);
+    web3.eth.accounts.wallet.add(account);
+
+    const tx = contract.methods.recordTemperature(tempInt);
+    const gas = await tx.estimateGas({ from: account.address });
+    const gasPrice = await web3.eth.getGasPrice();
+
+    const receipt = await tx.send({
+      from: account.address,
+      gas: gas,
+      gasPrice: gasPrice
+    });
+
+    res.json({
+      success: true,
+      transactionHash: receipt.transactionHash,
+      blockNumber: receipt.blockNumber,
+      deviceId,
+      temperature,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error recording temperature:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get latest temperature reading
+app.get('/api/temperature/:deviceAddress', async (req, res) => {
+  try {
+    const { deviceAddress } = req.params;
+
+    const reading = await contract.methods.getLatestReading(deviceAddress).call();
+
+    res.json({
+      success: true,
+      data: {
+        timestamp: new Date(parseInt(reading.timestamp) * 1000).toISOString(),
+        temperature: parseFloat(reading.temperature) / 100,
+        deviceId: reading.deviceId,
+        location: reading.location
+      }
+    });
+  } catch (error) {
+    console.error('Error getting temperature:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get device readings history
+app.get('/api/readings/:deviceAddress', async (req, res) => {
+  try {
+    const { deviceAddress } = req.params;
+    const limit = parseInt(req.query.limit) || 10;
+
+    const readings = await contract.methods.getDeviceReadings(deviceAddress, limit).call();
+
+    const formattedReadings = readings.map(reading => ({
+      timestamp: new Date(parseInt(reading.timestamp) * 1000).toISOString(),
+      temperature: parseFloat(reading.temperature) / 100,
+      deviceId: reading.deviceId,
+      location: reading.location,
+      isValid: reading.isValid
+    }));
+
+    res.json({
+      success: true,
+      count: formattedReadings.length,
+      data: formattedReadings
+    });
+  } catch (error) {
+    console.error('Error getting readings:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all registered devices
+app.get('/api/devices', async (req, res) => {
+  try {
+    const devices = await contract.methods.getAllDevices().call();
+
+    const deviceList = await Promise.all(
+      devices.map(async (address) => {
+        try {
+          const reading = await contract.methods.getLatestReading(address).call();
+          return {
+            address,
+            deviceId: reading.deviceId,
+            location: reading.location,
+            lastTemperature: parseFloat(reading.temperature) / 100,
+            lastUpdate: new Date(parseInt(reading.timestamp) * 1000).toISOString()
+          };
+        } catch (error) {
+          return {
+            address,
+            deviceId: 'Unknown',
+            location: 'Unknown',
+            lastTemperature: null,
+            lastUpdate: null
+          };
+        }
+      })
+    );
+
+    res.json({
+      success: true,
+      count: deviceList.length,
+      data: deviceList
+    });
+  } catch (error) {
+    console.error('Error getting devices:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Listen for blockchain events
+function listenToEvents() {
+  // Listen for temperature recordings
+  contract.events.TemperatureRecorded({
+    fromBlock: 'latest'
+  })
+  .on('data', (event) => {
+    console.log('Temperature Recorded:', {
+      deviceAddress: event.returnValues.deviceAddress,
+      deviceId: event.returnValues.deviceId,
+      temperature: parseFloat(event.returnValues.temperature) / 100,
+      timestamp: new Date(parseInt(event.returnValues.timestamp) * 1000).toISOString()
+    });
+  })
+  .on('error', console.error);
+
+  // Listen for alerts
+  contract.events.AlertTriggered({
+    fromBlock: 'latest'
+  })
+  .on('data', (event) => {
+    console.log('⚠️ ALERT TRIGGERED:', {
+      deviceAddress: event.returnValues.deviceAddress,
+      deviceId: event.returnValues.deviceId,
+      temperature: parseFloat(event.returnValues.temperature) / 100,
+      alertType: event.returnValues.alertType
+    });
+  })
+  .on('error', console.error);
+}
+
+// Start server
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📡 Connected to blockchain: ${process.env.BLOCKCHAIN_RPC || 'http://127.0.0.1:22000'}`);
+  console.log(`📝 Contract address: ${contractAddress}`);
+  listenToEvents();
+});
+
+module.exports = app;
