@@ -125,3 +125,14 @@
 22:15:22.845888 table@remove removed @18
 22:15:22.845905 table@remove removed @15
 22:15:22.845927 table@remove removed @14
+=============== Oct 30, 2025 (IST) ===============
+11:22:26.607544 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+11:22:26.608254 version@stat F·[0 1] S·176B[0B 176B] Sc·[0.00 0.00]
+11:22:26.608279 db@open opening
+11:22:26.608303 journal@recovery F·1
+11:22:26.610447 journal@recovery recovering @28
+11:22:26.614415 memdb@flush created L0@31 N·1 S·159B "loc..seq,v20":"loc..seq,v20"
+11:22:26.616519 version@stat F·[1 1] S·335B[159B 176B] Sc·[0.25 0.00]
+11:22:26.624868 db@janitor F·5 G·1
+11:22:26.624875 db@janitor removing table-27
+11:22:26.624902 db@open done T·16.619312ms
